@@ -9,17 +9,33 @@ const GRUDGE_FORGIVE = 'GRUDGE_FORGIVE';
 const UNDO = 'UNDO';
 const REDO = 'REDO';
 
+const useUndoReducer = (reducer, initialState) => {
+  const undoState = {
+    past: [],
+    present: initialState,
+    future: []
+  };
 
+  const undoReducer = (state, { type, payload }) => {
+    const newPresent = reducer(state.present, {type, payload});
+    if (type === UNDO) {
+      const [newPresent, ...newPast] = state.past;
+      return {
+        past: newPast,
+        present: newPresent,
+        future: [state.present,...state.future]
+      }
+    }
 
-const reducer = (state = defaultState, action) => {
-  if (action.type === GRUDGE_ADD) {
-    const newPresent = [
-      {
-        id: id(),
-        ...action.payload
-      },
-      ...state.present
-    ];
+    if (type === REDO) {
+      const [newPresent, ...newFuture] = state.future;
+      return {
+        past: [state.present, ...state.past],
+        present: newPresent,
+        future: newFuture
+      }
+    }
+
     return {
       past: [state.present, ...state.past],
       present: newPresent,
@@ -27,49 +43,35 @@ const reducer = (state = defaultState, action) => {
     };
   }
 
+  return useReducer(undoReducer, undoState);
+}
+
+
+const reducer = (state = initialState, action) => {
+  if (action.type === GRUDGE_ADD) {
+    return [
+      {
+        id: id(),
+        ...action.payload
+      },
+      ...state
+    ];
+  }
+
   if (action.type === GRUDGE_FORGIVE) {
-    const newPresent = state.present.map(grudge => {
+    return state.map(grudge => {
       if (grudge.id === action.payload.id) {
         return { ...grudge, forgiven: !grudge.forgiven };
       }
       return grudge;
     });
-    return {
-      past: [state.present, ...state.past],
-      present: newPresent,
-      future: []
-    };
-  }
-
-  if (action.type === UNDO) {
-    const [newPresent, ...newPast] = state.past;
-    return {
-      past: newPast,
-      present: newPresent,
-      future: [state.present,...state.future]
-    }
-  }
-
-  if (action.type === REDO) {
-    const [newPresent, ...newFuture] = state.future;
-    return {
-      past: [state.present, ...state.past],
-      present: newPresent,
-      future: newFuture
-    }
   }
 
   return state;
 };
 
-const defaultState = {
-  past: [],
-  present: initialState,
-  future: []
-}
-
 export const GrudgeProvider = ({ children }) => {
-  const [state, dispatch] = useReducer(reducer, defaultState);
+  const [state, dispatch] = useUndoReducer(reducer, initialState);
   const grudges = state.present;
   const isPast = !!state.past.length;
   const isFuture = !!state.future.length;
